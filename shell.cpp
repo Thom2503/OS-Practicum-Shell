@@ -5,7 +5,7 @@
 	* v22.09.05
 
 	Student names:
-	- ...
+	- Thom Veldhuis (s1173167)
 	- ...
 */
 
@@ -166,27 +166,54 @@ int execute_expression(Expression& expression) {
 int step1(bool showPrompt) {
   // create communication channel shared between the two processes
   // ...
+  int pipefd[2];
+  int pRes = pipe(pipefd);
+  if (pRes == -1) {
+	  perror("pipe");
+	  return errno;
+  }
 
   pid_t child1 = fork();
   if (child1 == 0) {
     // redirect standard output (STDOUT_FILENO) to the input of the shared communication channel
+	if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+		perror("dup2");
+		return errno;
+	}
     // free non used resources (why?)
+	close(pipefd[0]);
+	close(pipefd[1]);
+
     Command cmd = {{string("date")}};
-    execute_command(cmd);
+    int ret = execute_command(cmd);
     // display nice warning that the executable could not be found
+	if (ret != 0) {
+		cerr << "exec failed: " << strerror(ret) << endl;
+	}
     abort(); // if the executable is not found, we should abort. (why?)
   }
 
   pid_t child2 = fork();
   if (child2 == 0) {
-    // redirect the output of the shared communication channel to the standard input (STDIN_FILENO).
+    if (dup2(pipefd[0], STDIN_FILENO) == -1) {
+       perror("dup2");
+       return errno;
+    }
     // free non used resources (why?)
+    close(pipefd[0]);
+    close(pipefd[1]);
+
     Command cmd = {{string("tail"), string("-c"), string("5")}};
-    execute_command(cmd);
+    int ret = execute_command(cmd);
+	if (ret != 0) {
+		cerr << "exec failed: " << strerror(ret) << endl;
+	}
     abort(); // if the executable is not found, we should abort. (why?)
   }
 
   // free non used resources (why?)
+  close(pipefd[0]);
+  close(pipefd[1]);
   // wait on child processes to finish (why both?)
   waitpid(child1, nullptr, 0);
   waitpid(child2, nullptr, 0);
@@ -194,7 +221,7 @@ int step1(bool showPrompt) {
 }
 
 int shell(bool showPrompt) {
-  //* <- remove one '/' in front of the other '/' to switch from the normal code to step1 code
+  /* <- remove one '/' in front of the other '/' to switch from the normal code to step1 code
   while (cin.good()) {
     string commandLine = request_command_line(showPrompt);
     Expression expression = parse_command_line(commandLine);
@@ -202,8 +229,7 @@ int shell(bool showPrompt) {
     if (rc != 0)
       cerr << strerror(rc) << endl;
   }
-  return 0;
-  /*/
+//  return 0;
+*/
   return step1(showPrompt);
-  //*/
 }
