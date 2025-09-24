@@ -35,6 +35,8 @@
 #include <list>
 #include <optional>
 
+#include <fstream>
+
 // although it is good habit, you don't have to type 'std' before many objects by including this line
 using namespace std;
 
@@ -151,12 +153,58 @@ int execute_expression(Expression& expression) {
     return EINVAL;
 
   // Handle intern commands (like 'cd' and 'exit')
-  
+  // We're just looking at the first command in the list just to make it
+  // easier. Otherwise there would be many edge cases.
+  string cmd = expression.commands.at(0).parts.at(0);
+  if (cmd == static_cast<string>("exit")) {
+	exit(0);
+  } else if (cmd == static_cast<string>("cd")) {
+	string path = expression.commands.at(0).parts.at(1);
+	int res = chdir(path.c_str());
+	if (res < 0) {
+		perror("cd");
+		cerr << strerror(res) << endl;
+	}
+  }
   // External commands, executed with fork():
   // Loop over all commandos, and connect the output and input of the forked processes
+  int fds[2];
+  int pipeRes = pipe(fds);
+  if (pipeRes == -1) {
+	perror("pipe");
+	cerr << "pipe failed: " << strerror(pipeRes) << endl;
+  }
+  signal(SIGCHLD, SIG_DFL);
+  for (const auto& cmd : expression.commands) {
+  	pid_t child = fork();
+	if (child == 0) {
+		close(fds[1]);
+		if (dup2(fds[0], STDIN_FILENO) < 0) {
+			perror("dup2");
+			return errno;
+		}
+		close(fds[0]);
+		int ret = execute_command(cmd);
+		if (ret != 0) {
+			cerr << "exec failed: " << strerror(ret) << endl;
+		}
+		abort();
+	}
+	close(fds[1]);
+	close(fds[0]);
+	if (expression.background == false) {
+  		waitpid(child, nullptr, 0);
+	} else {
+		cout << "[1] " << (long)getpid() << endl;
+	}
+  }
 
-  // For now, we just execute the first command in the expression. Disable.
-  execute_command(expression.commands[0]);
+  if (expression.outputToFile != "") {
+	ofstream op;
+    op.open(expression.outputToFile, ios::out);
+    op << "Hello" << endl;
+    op.close();
+  }
 
   return 0;
 }
@@ -221,7 +269,7 @@ int step1(bool showPrompt) {
 }
 
 int shell(bool showPrompt) {
-  /* <- remove one '/' in front of the other '/' to switch from the normal code to step1 code
+  //* <- remove one '/' in front of the other '/' to switch from the normal code to step1 code
   while (cin.good()) {
     string commandLine = request_command_line(showPrompt);
     Expression expression = parse_command_line(commandLine);
@@ -229,7 +277,6 @@ int shell(bool showPrompt) {
     if (rc != 0)
       cerr << strerror(rc) << endl;
   }
-//  return 0;
-*/
-  return step1(showPrompt);
+  return 0;
+//  return step1(showPrompt);
 }
