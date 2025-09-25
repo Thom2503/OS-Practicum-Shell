@@ -149,8 +149,9 @@ Expression parse_command_line(string commandLine) {
 
 int execute_expression(Expression& expression) {
   // Check for empty expression
+  // Most normal shells do nothing when empty so why should we?
   if (expression.commands.size() == 0)
-    return EINVAL;
+    return 0;
 
   // Handle intern commands (like 'cd' and 'exit')
   // We're just looking at the first command in the list just to make it
@@ -168,42 +169,84 @@ int execute_expression(Expression& expression) {
   }
   // External commands, executed with fork():
   // Loop over all commandos, and connect the output and input of the forked processes
-  int fds[2];
-  int pipeRes = pipe(fds);
-  if (pipeRes == -1) {
-	perror("pipe");
-	cerr << "pipe failed: " << strerror(pipeRes) << endl;
-  }
-  signal(SIGCHLD, SIG_DFL);
-  for (const auto& cmd : expression.commands) {
-  	pid_t child = fork();
-	if (child == 0) {
-		close(fds[1]);
-		if (dup2(fds[0], STDIN_FILENO) < 0) {
-			perror("dup2");
+  int index = 0;
+  int no_commands = expression.commands.size();
+
+  int prev_file_descriptor = -1;
+
+  for (const auto& command : expression.commands) {
+    // Create pipe if you are not on the last command.
+    int file_descriptor[2];
+    if (index < no_commands - 1) {
+      int pipe_result = pipe(file_descriptor);
+      if (pipe_result == -1) {
+        perror("pipe");
+        return errno;
+      }
+    }
+
+    // Create child process
+    pid_t child_pid = fork();
+    if (child_pid == 0) {
+      /* First check if there is a previous file descriptor, if there is, 
+      STDIN_FILEMO is adjusted to the output of last iterations pipe. */
+      if (prev_file_descriptor != -1) {
+        if (dup2(prev_file_descriptor, STDIN_FILENO) == -1) {
+          perror("dup2");
+          cerr << "Failed prev_file_descriptor";
+          return errno;
+        }
+        close(prev_file_descriptor);
+      }
+	  if (index == no_commands - 1 && expression.outputToFile != "") {
+		int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+		if (outputFD < 0) {
+			perror("open output file");
+			cerr << "Failed opening file\n";
 			return errno;
 		}
-		close(fds[0]);
-		int ret = execute_command(cmd);
-		if (ret != 0) {
-			cerr << "exec failed: " << strerror(ret) << endl;
+		if (dup2(outputFD, STDOUT_FILENO) == -1) {
+			perror("dup2 outputToFile");
+			return errno;
 		}
-		abort();
-	}
-	close(fds[1]);
-	close(fds[0]);
+        int return_value = execute_command(command);
+        if (return_value != 0) {
+          cerr << "execute failed: " << strerror(return_value) << endl;
+        }
+		close(outputFD);
+        abort();
+	  }
+      /* Then, if you are not on the last command, STDOUT_FILENO is adjusted to the input of the pipe. */
+      if (index < no_commands - 1) {
+        if (dup2(file_descriptor[1], STDOUT_FILENO) == -1) {
+          perror("dup2");
+          cerr << "Failed file_descriptor[1]";
+          return errno;
+        }
+      }
+      close(file_descriptor[1]);
+      close(file_descriptor[0]);
+      int return_value = execute_command(command);
+      if (return_value != 0) {
+        cerr << "execute failed: " << strerror(return_value) << endl;
+      }
+      abort();
+    }
+
+    // Close file descriptors, and set prev_file_descriptor to the output of the pipe.
+    if (prev_file_descriptor != -1) close(prev_file_descriptor);
+    if (index < no_commands - 1) {
+      prev_file_descriptor = file_descriptor[0];
+    }
+    close(file_descriptor[1]);
+
 	if (expression.background == false) {
-  		waitpid(child, nullptr, 0);
+  		waitpid(child_pid, nullptr, 0);
 	} else {
 		cout << "[1] " << (long)getpid() << endl;
 	}
-  }
-
-  if (expression.outputToFile != "") {
-	ofstream op;
-    op.open(expression.outputToFile, ios::out);
-    op << "Hello" << endl;
-    op.close();
+    
+    index++;
   }
 
   return 0;
