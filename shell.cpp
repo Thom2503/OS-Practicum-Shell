@@ -198,22 +198,28 @@ int execute_expression(Expression& expression) {
         }
         close(prev_file_descriptor);
       }
+	  // if you're at the last command then the output can be put into a file
 	  if (index == no_commands - 1 && expression.outputToFile != "") {
+		// open a file descriptor to write to it
 		int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 		if (outputFD < 0) {
 			perror("open output file");
 			cerr << "Failed opening file\n";
 			return errno;
 		}
+		// make the standard out of the execvp to the file descriptor
 		if (dup2(outputFD, STDOUT_FILENO) == -1) {
 			perror("dup2 outputToFile");
 			return errno;
 		}
+		// execute the command
         int return_value = execute_command(command);
         if (return_value != 0) {
           cerr << "execute failed: " << strerror(return_value) << endl;
         }
+		// the file descriptor is not needed anymore
 		close(outputFD);
+		// bye
         abort();
 	  }
       /* Then, if you are not on the last command, STDOUT_FILENO is adjusted to the input of the pipe. */
