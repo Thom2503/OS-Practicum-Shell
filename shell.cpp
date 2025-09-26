@@ -188,29 +188,40 @@ int execute_expression(Expression& expression) {
     // Create child process
     pid_t child_pid = fork();
     if (child_pid == 0) {
-		if (index == 0 && expression.inputFromFile != "") {
-			int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
-			if (inputFD < 0) {
-				perror("open input file");
-				cerr << "Failed opening file\n";
-				return errno;
-			}
-			// make the standard in of the execvp to the file descriptor
-			if (dup2(inputFD, STDIN_FILENO) == -1) {
-				perror("dup2 inputFromFile");
-				return errno;
-			}
-			// execute the command
-        	int return_value = execute_command(command);
-        	if (return_value != 0) {
-        	  cerr << "execute failed: " << strerror(return_value) << endl;
-        	}
-			// the file descriptor is not needed anymore
-			close(inputFD);
-			// bye
-        	abort();
-		}
-      /* First check if there is a previous file descriptor, if there is, 
+      // If you are at the first command, you may need to take the input from a file.
+		  if (index == 0 && expression.inputFromFile != "") {
+		  	int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
+		  	if (inputFD < 0) {
+		  		perror("open input file");
+		  		cerr << "Failed opening file\n";
+		  		return errno;
+		  	}
+		  	// make the standard in of the execvp to the file descriptor
+		  	if (dup2(inputFD, STDIN_FILENO) == -1) {
+		  		perror("dup2 inputFromFile");
+		  		return errno;
+		  	}
+        // the file descriptor is not needed anymore
+        close(inputFD);
+		  }
+	    // if you're at the last command then the output can be put into a file
+	    if (index == no_commands - 1 && expression.outputToFile != "") {
+		    // open a file descriptor to write to it
+		    int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+		    if (outputFD < 0) {
+		  	  perror("open output file");
+		  	  cerr << "Failed opening file\n";
+		  	  return errno;
+		    }
+		    // make the standard out of the execvp to the file descriptor
+		    if (dup2(outputFD, STDOUT_FILENO) == -1) {
+		  	  perror("dup2 outputToFile");
+		  	  return errno;
+		    }
+        // the file descriptor is not needed anymore
+        close(outputFD);
+	    }
+      /* Check if there is a previous file descriptor, if there is, 
       STDIN_FILEMO is adjusted to the output of last iterations pipe. */
       if (prev_file_descriptor != -1) {
         if (dup2(prev_file_descriptor, STDIN_FILENO) == -1) {
@@ -218,32 +229,9 @@ int execute_expression(Expression& expression) {
           cerr << "Failed prev_file_descriptor";
           return errno;
         }
+        // This file descriptor is not needed anymore.
         close(prev_file_descriptor);
       }
-	  // if you're at the last command then the output can be put into a file
-	  if (index == no_commands - 1 && expression.outputToFile != "") {
-		// open a file descriptor to write to it
-		int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-		if (outputFD < 0) {
-			perror("open output file");
-			cerr << "Failed opening file\n";
-			return errno;
-		}
-		// make the standard out of the execvp to the file descriptor
-		if (dup2(outputFD, STDOUT_FILENO) == -1) {
-			perror("dup2 outputToFile");
-			return errno;
-		}
-		// execute the command
-        int return_value = execute_command(command);
-        if (return_value != 0) {
-          cerr << "execute failed: " << strerror(return_value) << endl;
-        }
-		// the file descriptor is not needed anymore
-		close(outputFD);
-		// bye
-        abort();
-	  }
       /* Then, if you are not on the last command, STDOUT_FILENO is adjusted to the input of the pipe. */
       if (index < no_commands - 1) {
         if (dup2(file_descriptor[1], STDOUT_FILENO) == -1) {
@@ -252,6 +240,7 @@ int execute_expression(Expression& expression) {
           return errno;
         }
       }
+      // The file descriptors can be closed.
       close(file_descriptor[1]);
       close(file_descriptor[0]);
       int return_value = execute_command(command);
@@ -268,12 +257,12 @@ int execute_expression(Expression& expression) {
     }
     close(file_descriptor[1]);
 
-	if (expression.background == false) {
-  		waitpid(child_pid, nullptr, 0);
-	} else {
-		cout << "[1] " << (long)getpid() << endl;
-	}
-    
+	  if (expression.background == false) {
+    		waitpid(child_pid, nullptr, 0);
+	  } else {
+	  	cout << "[1] " << (long)getpid() << endl;
+	  }
+
     index++;
   }
 
