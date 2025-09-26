@@ -1,12 +1,12 @@
 /**
-	* Shell framework
-	* course Operating Systems
-	* Radboud University
-	* v22.09.05
+    * Shell framework
+    * course Operating Systems
+    * Radboud University
+    * v22.09.05
 
-	Student names:
-	- Thom Veldhuis (s1173167)
-	- ...
+    Student names:
+    - Thom Veldhuis (s1173167)
+    - ...
 */
 
 /**
@@ -158,14 +158,14 @@ int execute_expression(Expression& expression) {
   // easier. Otherwise there would be many edge cases.
   string cmd = expression.commands.at(0).parts.at(0);
   if (cmd == static_cast<string>("exit")) {
-	exit(0);
+    exit(0);
   } else if (cmd == static_cast<string>("cd")) {
-	string path = expression.commands.at(0).parts.at(1);
-	int res = chdir(path.c_str());
-	if (res < 0) {
-		perror("cd");
-		cerr << strerror(res) << endl;
-	}
+    string path = expression.commands.at(0).parts.at(1);
+    int res = chdir(path.c_str());
+    if (res < 0) {
+      perror("cd");
+      cerr << strerror(res) << endl;
+    }
   }
   // External commands, executed with fork():
   // Loop over all commandos, and connect the output and input of the forked processes
@@ -188,28 +188,28 @@ int execute_expression(Expression& expression) {
     // Create child process
     pid_t child_pid = fork();
     if (child_pid == 0) {
-		if (index == 0 && expression.inputFromFile != "") {
-			int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
-			if (inputFD < 0) {
-				perror("open input file");
-				cerr << "Failed opening file\n";
-				return errno;
-			}
-			// make the standard in of the execvp to the file descriptor
-			if (dup2(inputFD, STDIN_FILENO) == -1) {
-				perror("dup2 inputFromFile");
-				return errno;
-			}
-			// execute the command
-        	int return_value = execute_command(command);
-        	if (return_value != 0) {
-        	  cerr << "execute failed: " << strerror(return_value) << endl;
-        	}
-			// the file descriptor is not needed anymore
-			close(inputFD);
-			// bye
-        	abort();
-		}
+      if (index == 0 && expression.inputFromFile != "") {
+        int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
+        if (inputFD < 0) {
+            perror("open input file");
+            cerr << "Failed opening file\n";
+            return errno;
+        }
+        // make the standard in of the execvp to the file descriptor
+        if (dup2(inputFD, STDIN_FILENO) == -1) {
+            perror("dup2 inputFromFile");
+            return errno;
+        }
+        // execute the command
+        int return_value = execute_command(command);
+        if (return_value != 0) {
+          cerr << "execute failed: " << strerror(return_value) << endl;
+        }
+        // the file descriptor is not needed anymore
+        close(inputFD);
+        // bye
+        abort();
+      }
       /* First check if there is a previous file descriptor, if there is, 
       STDIN_FILEMO is adjusted to the output of last iterations pipe. */
       if (prev_file_descriptor != -1) {
@@ -220,30 +220,30 @@ int execute_expression(Expression& expression) {
         }
         close(prev_file_descriptor);
       }
-	  // if you're at the last command then the output can be put into a file
-	  if (index == no_commands - 1 && expression.outputToFile != "") {
-		// open a file descriptor to write to it
-		int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-		if (outputFD < 0) {
-			perror("open output file");
-			cerr << "Failed opening file\n";
-			return errno;
-		}
-		// make the standard out of the execvp to the file descriptor
-		if (dup2(outputFD, STDOUT_FILENO) == -1) {
-			perror("dup2 outputToFile");
-			return errno;
-		}
-		// execute the command
+      // if you're at the last command then the output can be put into a file
+      if (index == no_commands - 1 && expression.outputToFile != "") {
+        // open a file descriptor to write to it
+        int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+        if (outputFD < 0) {
+            perror("open output file");
+            cerr << "Failed opening file\n";
+            return errno;
+        }
+        // make the standard out of the execvp to the file descriptor
+        if (dup2(outputFD, STDOUT_FILENO) == -1) {
+            perror("dup2 outputToFile");
+            return errno;
+        }
+        // execute the command
         int return_value = execute_command(command);
         if (return_value != 0) {
           cerr << "execute failed: " << strerror(return_value) << endl;
         }
-		// the file descriptor is not needed anymore
-		close(outputFD);
-		// bye
+        // the file descriptor is not needed anymore
+        close(outputFD);
+        // bye
         abort();
-	  }
+      }
       /* Then, if you are not on the last command, STDOUT_FILENO is adjusted to the input of the pipe. */
       if (index < no_commands - 1) {
         if (dup2(file_descriptor[1], STDOUT_FILENO) == -1) {
@@ -268,11 +268,11 @@ int execute_expression(Expression& expression) {
     }
     close(file_descriptor[1]);
 
-	if (expression.background == false) {
-  		waitpid(child_pid, nullptr, 0);
-	} else {
-		cout << "[1] " << (long)getpid() << endl;
-	}
+    if (expression.background == false) {
+        waitpid(child_pid, nullptr, 0);
+    } else {
+        cout << "[1] " << (long)getpid() << endl;
+    }
     
     index++;
   }
@@ -288,27 +288,27 @@ int step1(bool showPrompt) {
   int pipefd[2];
   int pRes = pipe(pipefd);
   if (pRes == -1) {
-	  perror("pipe");
-	  return errno;
+      perror("pipe");
+      return errno;
   }
 
   pid_t child1 = fork();
   if (child1 == 0) {
     // redirect standard output (STDOUT_FILENO) to the input of the shared communication channel
-	if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
-		perror("dup2");
-		return errno;
-	}
+    if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
+        perror("dup2");
+        return errno;
+    }
     // free non used resources (why?)
-	close(pipefd[0]);
-	close(pipefd[1]);
+    close(pipefd[0]);
+    close(pipefd[1]);
 
     Command cmd = {{string("date")}};
     int ret = execute_command(cmd);
     // display nice warning that the executable could not be found
-	if (ret != 0) {
-		cerr << "exec failed: " << strerror(ret) << endl;
-	}
+    if (ret != 0) {
+        cerr << "exec failed: " << strerror(ret) << endl;
+    }
     abort(); // if the executable is not found, we should abort. (why?)
   }
 
@@ -324,9 +324,9 @@ int step1(bool showPrompt) {
 
     Command cmd = {{string("tail"), string("-c"), string("5")}};
     int ret = execute_command(cmd);
-	if (ret != 0) {
-		cerr << "exec failed: " << strerror(ret) << endl;
-	}
+    if (ret != 0) {
+        cerr << "exec failed: " << strerror(ret) << endl;
+    }
     abort(); // if the executable is not found, we should abort. (why?)
   }
 
