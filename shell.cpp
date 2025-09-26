@@ -188,6 +188,28 @@ int execute_expression(Expression& expression) {
     // Create child process
     pid_t child_pid = fork();
     if (child_pid == 0) {
+		if (index == 0 && expression.inputFromFile != "") {
+			int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
+			if (inputFD < 0) {
+				perror("open input file");
+				cerr << "Failed opening file\n";
+				return errno;
+			}
+			// make the standard in of the execvp to the file descriptor
+			if (dup2(inputFD, STDIN_FILENO) == -1) {
+				perror("dup2 inputFromFile");
+				return errno;
+			}
+			// execute the command
+        	int return_value = execute_command(command);
+        	if (return_value != 0) {
+        	  cerr << "execute failed: " << strerror(return_value) << endl;
+        	}
+			// the file descriptor is not needed anymore
+			close(inputFD);
+			// bye
+        	abort();
+		}
       /* First check if there is a previous file descriptor, if there is, 
       STDIN_FILEMO is adjusted to the output of last iterations pipe. */
       if (prev_file_descriptor != -1) {
