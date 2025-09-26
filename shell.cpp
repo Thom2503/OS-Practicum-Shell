@@ -6,7 +6,7 @@
 
     Student names:
     - Thom Veldhuis (s1173167)
-    - ...
+    - Jan Mes (s2)
 */
 
 /**
@@ -160,11 +160,15 @@ int execute_expression(Expression& expression) {
   if (cmd == static_cast<string>("exit")) {
     exit(0);
   } else if (cmd == static_cast<string>("cd")) {
+    if (expression.commands.at(0).parts.size() < 2) {
+      cerr << "cd: missing argument\n";
+      return 0;
+    }
     string path = expression.commands.at(0).parts.at(1);
     int res = chdir(path.c_str());
     if (res < 0) {
       perror("cd");
-      cerr << strerror(res) << endl;
+      return 0;
     }
   }
   // External commands, executed with fork():
@@ -203,7 +207,7 @@ int execute_expression(Expression& expression) {
         // execute the command
         int return_value = execute_command(command);
         if (return_value != 0) {
-          cerr << "execute failed: " << strerror(return_value) << endl;
+          cerr << command.parts[0] << ": " << strerror(return_value) << endl;
         }
         // the file descriptor is not needed anymore
         close(inputFD);
@@ -237,7 +241,7 @@ int execute_expression(Expression& expression) {
         // execute the command
         int return_value = execute_command(command);
         if (return_value != 0) {
-          cerr << "execute failed: " << strerror(return_value) << endl;
+          cerr << command.parts[0] << ": " << strerror(return_value) << endl;
         }
         // the file descriptor is not needed anymore
         close(outputFD);
@@ -256,7 +260,7 @@ int execute_expression(Expression& expression) {
       close(file_descriptor[0]);
       int return_value = execute_command(command);
       if (return_value != 0) {
-        cerr << "execute failed: " << strerror(return_value) << endl;
+          cerr << command.parts[0] << ": " << strerror(return_value) << endl;
       }
       abort();
     }
