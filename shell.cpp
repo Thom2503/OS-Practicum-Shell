@@ -6,7 +6,7 @@
 
     Student names:
     - Thom Veldhuis (s1173167)
-    - Jan Mes (s2)
+    - Jan Mes (s1116707)
 */
 
 /**
