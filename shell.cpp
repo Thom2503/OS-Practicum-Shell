@@ -16,37 +16,33 @@
  */
 
 // function/class definitions you are going to use
-#include <iostream>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <sys/param.h>
-#include <signal.h>
-#include <string.h>
 #include <assert.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <errno.h>
 #include <fcntl.h>
-
-#include <vector>
-#include <list>
-#include <optional>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/param.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include <fstream>
+#include <iostream>
+#include <list>
+#include <optional>
+#include <vector>
 
 // although it is good habit, you don't have to type 'std' before many objects by including this line
 using namespace std;
 
-struct Command
-{
+struct Command {
     vector<string> parts = {};
 };
 
-struct Expression
-{
+struct Expression {
     vector<Command> commands;
     string inputFromFile;
     string outputToFile;
@@ -54,22 +50,18 @@ struct Expression
 };
 
 // Parses a string to form a vector of arguments. The separator is a space char (' ').
-vector<string> split_string(const string &str, char delimiter = ' ')
-{
+vector<string> split_string(const string &str, char delimiter = ' ') {
     vector<string> retval;
-    for (size_t pos = 0; pos < str.length();)
-    {
+    for (size_t pos = 0; pos < str.length();) {
         // look for the next space
         size_t found = str.find(delimiter, pos);
         // if no space was found, this is the last word
-        if (found == string::npos)
-        {
+        if (found == string::npos) {
             retval.push_back(str.substr(pos));
             break;
         }
         // filter out consequetive spaces
-        if (found != pos)
-            retval.push_back(str.substr(pos, found - pos));
+        if (found != pos) retval.push_back(str.substr(pos, found - pos));
         pos = found + 1;
     }
     return retval;
@@ -78,12 +70,10 @@ vector<string> split_string(const string &str, char delimiter = ' ')
 // wrapper around the C execvp so it can be called with C++ strings (easier to work with)
 // always start with the command itself
 // DO NOT CHANGE THIS FUNCTION UNDER ANY CIRCUMSTANCE
-int execvp(const vector<string> &args)
-{
+int execvp(const vector<string> &args) {
     // build argument list
     const char **c_args = new const char *[args.size() + 1];
-    for (size_t i = 0; i < args.size(); ++i)
-    {
+    for (size_t i = 0; i < args.size(); ++i) {
         c_args[i] = args[i].c_str();
     }
     c_args[args.size()] = nullptr;
@@ -98,33 +88,27 @@ int execvp(const vector<string> &args)
 }
 
 // Executes a command with arguments. In case of failure, returns error code.
-int execute_command(const Command &cmd)
-{
+int execute_command(const Command &cmd) {
     auto &parts = cmd.parts;
-    if (parts.size() == 0)
-        return EINVAL;
+    if (parts.size() == 0) return EINVAL;
 
     // execute external commands
     int retval = execvp(parts);
     return retval ? errno : 0;
 }
 
-void display_prompt()
-{
+void display_prompt() {
     char buffer[512];
     char *dir = getcwd(buffer, sizeof(buffer));
-    if (dir)
-    {
-        cout << "\e[32m" << dir << "\e[39m"; // the strings starting with '\e' are escape codes, that the terminal application interpets in this case as "set color to green"/"set color to default"
+    if (dir) {
+        cout << "\e[32m" << dir << "\e[39m";  // the strings starting with '\e' are escape codes, that the terminal application interpets in this case as "set color to green"/"set color to default"
     }
     cout << "$ ";
     flush(cout);
 }
 
-string request_command_line(bool showPrompt)
-{
-    if (showPrompt)
-    {
+string request_command_line(bool showPrompt) {
+    if (showPrompt) {
         display_prompt();
     }
     string retval;
@@ -136,26 +120,21 @@ string request_command_line(bool showPrompt)
 // Here, the user input can be parsed using the following approach.
 // First, divide the input into the distinct commands (as they can be chained, separated by `|`).
 // Next, these commands are parsed separately. The first command is checked for the `<` operator, and the last command for the `>` operator.
-Expression parse_command_line(string commandLine)
-{
+Expression parse_command_line(string commandLine) {
     Expression expression;
     vector<string> commands = split_string(commandLine, '|');
-    for (size_t i = 0; i < commands.size(); ++i)
-    {
+    for (size_t i = 0; i < commands.size(); ++i) {
         string &line = commands[i];
         vector<string> args = split_string(line, ' ');
-        if (i == commands.size() - 1 && args.size() > 1 && args[args.size() - 1] == "&")
-        {
+        if (i == commands.size() - 1 && args.size() > 1 && args[args.size() - 1] == "&") {
             expression.background = true;
             args.resize(args.size() - 1);
         }
-        if (i == commands.size() - 1 && args.size() > 2 && args[args.size() - 2] == ">")
-        {
+        if (i == commands.size() - 1 && args.size() > 2 && args[args.size() - 2] == ">") {
             expression.outputToFile = args[args.size() - 1];
             args.resize(args.size() - 2);
         }
-        if (i == 0 && args.size() > 2 && args[args.size() - 2] == "<")
-        {
+        if (i == 0 && args.size() > 2 && args[args.size() - 2] == "<") {
             expression.inputFromFile = args[args.size() - 1];
             args.resize(args.size() - 2);
         }
@@ -164,27 +143,21 @@ Expression parse_command_line(string commandLine)
     return expression;
 }
 
-int execute_expression(Expression &expression)
-{
+int execute_expression(Expression &expression) {
     // Check for empty expression
     // Most normal shells do nothing when empty so why should we?
-    if (expression.commands.size() == 0)
-        return 0;
+    if (expression.commands.size() == 0) return 0;
 
     // Handle intern commands (like 'cd' and 'exit')
     // We're just looking at the first command in the list just to make it
     // easier. Otherwise there would be many edge cases.
     string cmd = expression.commands.at(0).parts.at(0);
-    if (cmd == static_cast<string>("exit"))
-    {
+    if (cmd == static_cast<string>("exit")) {
         exit(0);
-    }
-    else if (cmd == static_cast<string>("cd"))
-    {
+    } else if (cmd == static_cast<string>("cd")) {
         string path = expression.commands.at(0).parts.at(1);
         int res = chdir(path.c_str());
-        if (res < 0)
-        {
+        if (res < 0) {
             perror("cd");
             cerr << strerror(res) << endl;
         }
@@ -196,15 +169,12 @@ int execute_expression(Expression &expression)
 
     int prev_file_descriptor = -1;
 
-    for (const auto &command : expression.commands)
-    {
+    for (const auto &command : expression.commands) {
         // Create pipe if you are not on the last command.
         int file_descriptor[2];
-        if (index < no_commands - 1)
-        {
+        if (index < no_commands - 1) {
             int pipe_result = pipe(file_descriptor);
-            if (pipe_result == -1)
-            {
+            if (pipe_result == -1) {
                 perror("pipe");
                 return errno;
             }
@@ -212,21 +182,17 @@ int execute_expression(Expression &expression)
 
         // Create child process
         pid_t child_pid = fork();
-        if (child_pid == 0)
-        {
+        if (child_pid == 0) {
             // If you are at the first command, you may need to take the input from a file.
-            if (index == 0 && expression.inputFromFile != "")
-            {
+            if (index == 0 && expression.inputFromFile != "") {
                 int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
-                if (inputFD < 0)
-                {
+                if (inputFD < 0) {
                     perror("open input file");
                     cerr << "Failed opening file\n";
                     return errno;
                 }
                 // make the standard in of the execvp to the file descriptor
-                if (dup2(inputFD, STDIN_FILENO) == -1)
-                {
+                if (dup2(inputFD, STDIN_FILENO) == -1) {
                     perror("dup2 inputFromFile");
                     return errno;
                 }
@@ -234,19 +200,16 @@ int execute_expression(Expression &expression)
                 close(inputFD);
             }
             // if you're at the last command then the output can be put into a file
-            if (index == no_commands - 1 && expression.outputToFile != "")
-            {
+            if (index == no_commands - 1 && expression.outputToFile != "") {
                 // open a file descriptor to write to it
                 int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
-                if (outputFD < 0)
-                {
+                if (outputFD < 0) {
                     perror("open output file");
                     cerr << "Failed opening file\n";
                     return errno;
                 }
                 // make the standard out of the execvp to the file descriptor
-                if (dup2(outputFD, STDOUT_FILENO) == -1)
-                {
+                if (dup2(outputFD, STDOUT_FILENO) == -1) {
                     perror("dup2 outputToFile");
                     return errno;
                 }
@@ -255,10 +218,8 @@ int execute_expression(Expression &expression)
             }
             /* Check if there is a previous file descriptor, if there is,
             STDIN_FILEMO is adjusted to the output of last iterations pipe. */
-            if (prev_file_descriptor != -1)
-            {
-                if (dup2(prev_file_descriptor, STDIN_FILENO) == -1)
-                {
+            if (prev_file_descriptor != -1) {
+                if (dup2(prev_file_descriptor, STDIN_FILENO) == -1) {
                     perror("dup2");
                     cerr << "Failed prev_file_descriptor";
                     return errno;
@@ -267,10 +228,8 @@ int execute_expression(Expression &expression)
                 close(prev_file_descriptor);
             }
             /* Then, if you are not on the last command, STDOUT_FILENO is adjusted to the input of the pipe. */
-            if (index < no_commands - 1)
-            {
-                if (dup2(file_descriptor[1], STDOUT_FILENO) == -1)
-                {
+            if (index < no_commands - 1) {
+                if (dup2(file_descriptor[1], STDOUT_FILENO) == -1) {
                     perror("dup2");
                     cerr << "Failed file_descriptor[1]";
                     return errno;
@@ -280,28 +239,21 @@ int execute_expression(Expression &expression)
             close(file_descriptor[1]);
             close(file_descriptor[0]);
             int return_value = execute_command(command);
-            if (return_value != 0)
-            {
+            if (return_value != 0) {
                 cerr << "execute failed: " << strerror(return_value) << endl;
             }
             abort();
         }
 
         // Close file descriptors, and set prev_file_descriptor to the output of the pipe.
-        if (prev_file_descriptor != -1)
-            close(prev_file_descriptor);
-        if (index < no_commands - 1)
-            prev_file_descriptor = file_descriptor[0];
-        if (index == no_commands - 1)
-            close(file_descriptor[0]);
+        if (prev_file_descriptor != -1) close(prev_file_descriptor);
+        if (index < no_commands - 1) prev_file_descriptor = file_descriptor[0];
+        if (index == no_commands - 1) close(file_descriptor[0]);
         close(file_descriptor[1]);
 
-        if (expression.background == false)
-        {
+        if (expression.background == false) {
             waitpid(child_pid, nullptr, 0);
-        }
-        else
-        {
+        } else {
             cout << "[1] " << (long)getpid() << endl;
         }
 
@@ -313,24 +265,20 @@ int execute_expression(Expression &expression)
 
 // framework for executing "date | tail -c 5" using raw commands
 // two processes are created, and connected to each other
-int step1(bool showPrompt)
-{
+int step1(bool showPrompt) {
     // create communication channel shared between the two processes
     // ...
     int pipefd[2];
     int pRes = pipe(pipefd);
-    if (pRes == -1)
-    {
+    if (pRes == -1) {
         perror("pipe");
         return errno;
     }
 
     pid_t child1 = fork();
-    if (child1 == 0)
-    {
+    if (child1 == 0) {
         // redirect standard output (STDOUT_FILENO) to the input of the shared communication channel
-        if (dup2(pipefd[1], STDOUT_FILENO) == -1)
-        {
+        if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
             perror("dup2");
             return errno;
         }
@@ -341,18 +289,15 @@ int step1(bool showPrompt)
         Command cmd = {{string("date")}};
         int ret = execute_command(cmd);
         // display nice warning that the executable could not be found
-        if (ret != 0)
-        {
+        if (ret != 0) {
             cerr << "exec failed: " << strerror(ret) << endl;
         }
-        abort(); // if the executable is not found, we should abort. (why?)
+        abort();  // if the executable is not found, we should abort. (why?)
     }
 
     pid_t child2 = fork();
-    if (child2 == 0)
-    {
-        if (dup2(pipefd[0], STDIN_FILENO) == -1)
-        {
+    if (child2 == 0) {
+        if (dup2(pipefd[0], STDIN_FILENO) == -1) {
             perror("dup2");
             return errno;
         }
@@ -362,11 +307,10 @@ int step1(bool showPrompt)
 
         Command cmd = {{string("tail"), string("-c"), string("5")}};
         int ret = execute_command(cmd);
-        if (ret != 0)
-        {
+        if (ret != 0) {
             cerr << "exec failed: " << strerror(ret) << endl;
         }
-        abort(); // if the executable is not found, we should abort. (why?)
+        abort();  // if the executable is not found, we should abort. (why?)
     }
 
     // free non used resources (why?)
@@ -378,16 +322,13 @@ int step1(bool showPrompt)
     return 0;
 }
 
-int shell(bool showPrompt)
-{
+int shell(bool showPrompt) {
     //* <- remove one '/' in front of the other '/' to switch from the normal code to step1 code
-    while (cin.good())
-    {
+    while (cin.good()) {
         string commandLine = request_command_line(showPrompt);
         Expression expression = parse_command_line(commandLine);
         int rc = execute_expression(expression);
-        if (rc != 0)
-            cerr << strerror(rc) << endl;
+        if (rc != 0) cerr << strerror(rc) << endl;
     }
     return 0;
     //  return step1(showPrompt);
