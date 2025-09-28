@@ -175,6 +175,7 @@ int execute_expression(Expression& expression) {
   int no_commands = expression.commands.size();
 
   int prev_file_descriptor = -1;
+  pid_t child_pids[no_commands];
 
   for (const auto& command : expression.commands) {
     // Create pipe if you are not on the last command.
@@ -188,19 +189,19 @@ int execute_expression(Expression& expression) {
     }
 
     // Create child process
-    pid_t child_pid = fork();
-    if (child_pid == 0) {
+    child_pids[index] = fork();
+    if (child_pids[index] == 0) {
       if (index == 0 && expression.inputFromFile != "") {
         int inputFD = open(expression.inputFromFile.c_str(), O_RDONLY);
         if (inputFD < 0) {
-            perror("open input file");
-            cerr << "Failed opening file\n";
-            return errno;
+          perror("open input file");
+          cerr << "Failed opening file\n";
+          return errno;
         }
         // make the standard in of the execvp to the file descriptor
         if (dup2(inputFD, STDIN_FILENO) == -1) {
-            perror("dup2 inputFromFile");
-            return errno;
+          perror("dup2 inputFromFile");
+          return errno;
         }
         // execute the command
         int return_value = execute_command(command);
@@ -227,14 +228,14 @@ int execute_expression(Expression& expression) {
         // open a file descriptor to write to it
         int outputFD = open(expression.outputToFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
         if (outputFD < 0) {
-            perror("open output file");
-            cerr << "Failed opening file\n";
-            return errno;
+          perror("open output file");
+          cerr << "Failed opening file\n";
+          return errno;
         }
         // make the standard out of the execvp to the file descriptor
         if (dup2(outputFD, STDOUT_FILENO) == -1) {
-            perror("dup2 outputToFile");
-            return errno;
+          perror("dup2 outputToFile");
+          return errno;
         }
         // execute the command
         int return_value = execute_command(command);
@@ -258,7 +259,7 @@ int execute_expression(Expression& expression) {
       close(file_descriptor[0]);
       int return_value = execute_command(command);
       if (return_value != 0) {
-          cerr << command.parts[0] << ": " << strerror(return_value) << endl;
+        cerr << command.parts[0] << ": " << strerror(return_value) << endl;
       }
       abort();
     }
@@ -269,14 +270,16 @@ int execute_expression(Expression& expression) {
       prev_file_descriptor = file_descriptor[0];
     }
     close(file_descriptor[1]);
-
-    if (expression.background == false) {
-        waitpid(child_pid, nullptr, 0);
-    } else {
-        cout << "[1] " << (long)getpid() << endl;
-    }
     
     index++;
+  }
+
+  for (pid_t pid : child_pids) {
+    if (expression.background) {
+      cout << "[1] " << (long)pid << endl;
+    } else {
+      waitpid(pid, nullptr, 0);
+    }
   }
 
   return 0;
@@ -290,16 +293,16 @@ int step1(bool showPrompt) {
   int pipefd[2];
   int pRes = pipe(pipefd);
   if (pRes == -1) {
-      perror("pipe");
-      return errno;
+    perror("pipe");
+    return errno;
   }
 
   pid_t child1 = fork();
   if (child1 == 0) {
     // redirect standard output (STDOUT_FILENO) to the input of the shared communication channel
     if (dup2(pipefd[1], STDOUT_FILENO) == -1) {
-        perror("dup2");
-        return errno;
+      perror("dup2");
+      return errno;
     }
     // free non used resources (why?)
     close(pipefd[0]);
@@ -309,7 +312,7 @@ int step1(bool showPrompt) {
     int ret = execute_command(cmd);
     // display nice warning that the executable could not be found
     if (ret != 0) {
-        cerr << "exec failed: " << strerror(ret) << endl;
+      cerr << "exec failed: " << strerror(ret) << endl;
     }
     abort(); // if the executable is not found, we should abort. (why?)
   }
@@ -317,8 +320,8 @@ int step1(bool showPrompt) {
   pid_t child2 = fork();
   if (child2 == 0) {
     if (dup2(pipefd[0], STDIN_FILENO) == -1) {
-       perror("dup2");
-       return errno;
+      perror("dup2");
+      return errno;
     }
     // free non used resources (why?)
     close(pipefd[0]);
@@ -327,7 +330,7 @@ int step1(bool showPrompt) {
     Command cmd = {{string("tail"), string("-c"), string("5")}};
     int ret = execute_command(cmd);
     if (ret != 0) {
-        cerr << "exec failed: " << strerror(ret) << endl;
+      cerr << "exec failed: " << strerror(ret) << endl;
     }
     abort(); // if the executable is not found, we should abort. (why?)
   }
