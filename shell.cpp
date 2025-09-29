@@ -203,15 +203,8 @@ int execute_expression(Expression& expression) {
           perror("dup2 inputFromFile");
           return errno;
         }
-        // execute the command
-        int return_value = execute_command(command);
-        if (return_value != 0) {
-          cerr << command.parts[0] << ": " << strerror(return_value) << endl;
-        }
         // the file descriptor is not needed anymore
         close(inputFD);
-        // bye
-        abort();
       }
       /* First check if there is a previous file descriptor, if there is, 
       STDIN_FILEMO is adjusted to the output of last iterations pipe. */
@@ -237,15 +230,8 @@ int execute_expression(Expression& expression) {
           perror("dup2 outputToFile");
           return errno;
         }
-        // execute the command
-        int return_value = execute_command(command);
-        if (return_value != 0) {
-          cerr << command.parts[0] << ": " << strerror(return_value) << endl;
-        }
         // the file descriptor is not needed anymore
         close(outputFD);
-        // bye
-        abort();
       }
       /* Then, if you are not on the last command, STDOUT_FILENO is adjusted to the input of the pipe. */
       if (index < no_commands - 1) {
